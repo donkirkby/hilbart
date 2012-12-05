@@ -1,22 +1,26 @@
 package com.github.donkirkby.hilbart;
 
-import android.os.Bundle;
 import android.app.Activity;
-import android.view.Menu;
+import android.graphics.Color;
+import android.os.Bundle;
 
 public class MainActivity extends Activity {
+    DrawView drawView;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.activity_main);
+
+		drawView = new DrawView(this);
+        drawView.setBackgroundColor(Color.WHITE);
+        setContentView(drawView);
 	}
 
-	@Override
-	public boolean onCreateOptionsMenu(Menu menu) {
-		// Inflate the menu; this adds items to the action bar if it is present.
-		getMenuInflater().inflate(R.menu.activity_main, menu);
-		return true;
-	}
+//	@Override
+//	public boolean onCreateOptionsMenu(Menu menu) {
+//		// Inflate the menu; this adds items to the action bar if it is present.
+//		getMenuInflater().inflate(R.menu.activity_main, menu);
+//		return true;
+//	}
 
 }
