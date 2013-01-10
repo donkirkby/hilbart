@@ -295,7 +295,7 @@ public class DrawView extends View {
         int intensity = 0;
         int pixelsPassed = 0;
         for (int i = 0; i < levelCount; i++) {
-        	int threshold = pixelCount*i/levelCount;
+        	int threshold = pixelCount*(i+1)/levelCount;
         	while (pixelsPassed < threshold && intensity < 256) {
 				pixelsPassed += colourCounts[intensity];
 				intensity++;
