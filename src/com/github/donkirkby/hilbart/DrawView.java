@@ -29,6 +29,10 @@ public class DrawView extends View {
 	private Path path;
 	private Dictionary<Integer, Double> levels = 
 			new Hashtable<Integer, Double>();
+	private int leftLatticeMargin;
+	private int topLatticeMargin;
+	private int topCanvasMargin;
+	private int leftCanvasMargin;
     
     public DrawView(Context context) {
         super(context);
@@ -43,8 +47,8 @@ public class DrawView extends View {
     @Override
     public void onDraw(Canvas canvas) {
     	if (path.isEmpty()) {
-    		int width;
-    		int height;
+    		int latticeWidth;
+    		int latticeHeight;
     		int imageHeight = bitmap.getHeight();
 			int imageWidth = bitmap.getWidth();
 			float aspect = imageHeight / (float)imageWidth;
@@ -52,35 +56,43 @@ public class DrawView extends View {
 			float potentialHeight = canvasWidth * aspect;
     		int canvasHeight = canvas.getHeight();
 			if (potentialHeight > canvasHeight) {
-				height = Math.round(canvasHeight / (float)gap);
-				width = Math.round(canvasHeight / aspect / gap);
+				latticeHeight = Math.round(canvasHeight / (float)gap);
+				latticeWidth = Math.round(canvasHeight / aspect / gap);
 			} else {
-				width = Math.round(canvasWidth / (float)gap);
-				height = Math.round(canvasWidth * aspect / gap);
+				latticeWidth = Math.round(canvasWidth / (float)gap);
+				latticeHeight = Math.round(canvasWidth * aspect / gap);
 			}
+			leftCanvasMargin = (canvasWidth - latticeWidth*gap)/2;
+			topCanvasMargin = (canvasHeight - latticeHeight*gap)/2;
     		Bitmap sized = Bitmap.createScaledBitmap(
     				bitmap, 
-    				width,
-    				height,
+    				latticeWidth,
+    				latticeHeight,
     				false);
     		
 			scaled = toGrayscale(sized);
-			int n=4;
-			int m=6;
+			int n=10;
+			int m=14;
 			int pathWidth = m;
 			int pathHeight = n;
 			int levelCount = 1;
 			int size = 1;
 			
-			while ((pathWidth * 2 < width) && (pathHeight * 2 < height)) {
+			while ((pathWidth * 2 < latticeWidth) && 
+					(pathHeight * 2 < latticeHeight)) {
 				pathWidth *= 2;
 				pathHeight *= 2;
 				size *= 2;
 				levelCount++;
 			}
-			pathWidth *= gap;
-			pathHeight *= gap;
-			calculateLevels(levelCount, 0, 0, pathWidth, pathHeight);
+			leftLatticeMargin = (latticeWidth - pathWidth)/2;
+			topLatticeMargin = (latticeHeight - pathHeight)/2;
+			calculateLevels(
+					levelCount, 
+					pathWidth, 
+					pathHeight);
+			
+			movePath(0, (n/2)*size - 1);
 			drawNxMCells(pathHeight, pathWidth, n, m, size);
     	}	    	
 	    	
@@ -96,11 +108,15 @@ public class DrawView extends View {
 	}
 	
 	private void extendPath(int x, int y) {
-		path.lineTo(x * gap, y * gap);
+		path.lineTo(
+				leftCanvasMargin + (leftLatticeMargin + x) * gap, 
+				topCanvasMargin + (topLatticeMargin + y) * gap);
 	}
 	
 	private void movePath(int x, int y) {
-		path.moveTo(x * gap, y * gap);
+		path.moveTo(
+				leftCanvasMargin + (leftLatticeMargin + x) * gap, 
+				topCanvasMargin + (topLatticeMargin + y) * gap);
 	}
 	
 	private void drawNxMCells(
@@ -265,14 +281,12 @@ public class DrawView extends View {
     
     private void calculateLevels(
     		int levelCount, 
-    		int left, 
-    		int top, 
     		int width, 
     		int height) {
         
         int[] colourCounts = new int[256];
-        for (int x = left; x < width; x++) {
-			for (int y = top; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+			for (int y = 0; y < height; y++) {
 				colourCounts[getIntensity(x, y)]++;
 			}
 		}
@@ -292,17 +306,16 @@ public class DrawView extends View {
     }
     
     /**
-     * Read the pixel intensity to display at screen coordinates x and y.
-     * This gets converted to smaller coordinates within the image and we
-     * also convert the grayscale colour values to a number between 0 and 
+     * Read the pixel intensity to display at lattice coordinates x and y.
+     * We convert the grayscale colour values to a number between 0 and 
      * 255.
-     * @param x screen coordinate
-     * @param y screen coordinate
+     * @param x lattice coordinate
+     * @param y lattice coordinate
      * @return a number between 0 and 255.
      */
     private int getIntensity(int x, int y)
     {
-		return scaled.getPixel(x/gap, y/gap) & 255;
+		return scaled.getPixel(leftLatticeMargin + x, topLatticeMargin + y) & 255;
     }
 
 	//read from sdcard
