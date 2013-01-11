@@ -1,11 +1,8 @@
 package com.github.donkirkby.hilbart;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Dictionary;
 import java.util.Hashtable;
-import java.util.Iterator;
-import java.util.List;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -17,15 +14,13 @@ import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.Paint.Style;
 import android.graphics.Path;
+import android.os.Environment;
 import android.view.View;
 
 public class DrawView extends View {
     private Paint paint = new Paint();
     private int gap;
-    private Bitmap bitmap;
     private Bitmap scaled;
-    private float xScale = (float) 4.0;
-    private float yScale = (float) 4.0;
 	private Path path;
 	private Dictionary<Integer, Double> levels = 
 			new Hashtable<Integer, Double>();
@@ -40,73 +35,67 @@ public class DrawView extends View {
         paint.setStyle(Style.STROKE);
         gap = 2;
         paint.setStrokeWidth((float) (gap/2.0));
-        bitmap = BitmapFactory.decodeFile(getLatestImage());
-        path = new Path();
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+    	super.onSizeChanged(w, h, oldw, oldh);
+        Bitmap bitmap = BitmapFactory.decodeFile(getLatestImage());
+		int latticeWidth;
+		int latticeHeight;
+		int imageHeight = bitmap.getHeight();
+		int imageWidth = bitmap.getWidth();
+		float aspect = imageHeight / (float)imageWidth;
+		int canvasWidth = w;
+		float potentialHeight = canvasWidth * aspect;
+		int canvasHeight = h;
+		if (potentialHeight > canvasHeight) {
+			latticeHeight = Math.round(canvasHeight / (float)gap);
+			latticeWidth = Math.round(canvasHeight / aspect / gap);
+		} else {
+			latticeWidth = Math.round(canvasWidth / (float)gap);
+			latticeHeight = Math.round(canvasWidth * aspect / gap);
+		}
+		leftCanvasMargin = (canvasWidth - latticeWidth*gap)/2;
+		topCanvasMargin = (canvasHeight - latticeHeight*gap)/2;
+		scaled = null;
+		path = new Path();
+		Bitmap sized = Bitmap.createScaledBitmap(
+				bitmap, 
+				latticeWidth,
+				latticeHeight,
+				false);
+		scaled = toGrayscale(sized);
+		int n=10;
+		int m=14;
+		int pathWidth = m;
+		int pathHeight = n;
+		int levelCount = 1;
+		int size = 1;
+		
+		while ((pathWidth * 2 < latticeWidth) && 
+				(pathHeight * 2 < latticeHeight)) {
+			pathWidth *= 2;
+			pathHeight *= 2;
+			size *= 2;
+			levelCount++;
+		}
+		leftLatticeMargin = (latticeWidth - pathWidth)/2;
+		topLatticeMargin = (latticeHeight - pathHeight)/2;
+		calculateLevels(
+				levelCount, 
+				pathWidth, 
+				pathHeight);
+		
+		movePath(0, (n/2)*size - 1);
+		drawNxMCells(pathHeight, pathWidth, n, m, size);
     }
 
     @Override
     public void onDraw(Canvas canvas) {
-    	if (path.isEmpty()) {
-    		int latticeWidth;
-    		int latticeHeight;
-    		int imageHeight = bitmap.getHeight();
-			int imageWidth = bitmap.getWidth();
-			float aspect = imageHeight / (float)imageWidth;
-    		int canvasWidth = canvas.getWidth();
-			float potentialHeight = canvasWidth * aspect;
-    		int canvasHeight = canvas.getHeight();
-			if (potentialHeight > canvasHeight) {
-				latticeHeight = Math.round(canvasHeight / (float)gap);
-				latticeWidth = Math.round(canvasHeight / aspect / gap);
-			} else {
-				latticeWidth = Math.round(canvasWidth / (float)gap);
-				latticeHeight = Math.round(canvasWidth * aspect / gap);
-			}
-			leftCanvasMargin = (canvasWidth - latticeWidth*gap)/2;
-			topCanvasMargin = (canvasHeight - latticeHeight*gap)/2;
-    		Bitmap sized = Bitmap.createScaledBitmap(
-    				bitmap, 
-    				latticeWidth,
-    				latticeHeight,
-    				false);
-    		
-			scaled = toGrayscale(sized);
-			int n=10;
-			int m=14;
-			int pathWidth = m;
-			int pathHeight = n;
-			int levelCount = 1;
-			int size = 1;
-			
-			while ((pathWidth * 2 < latticeWidth) && 
-					(pathHeight * 2 < latticeHeight)) {
-				pathWidth *= 2;
-				pathHeight *= 2;
-				size *= 2;
-				levelCount++;
-			}
-			leftLatticeMargin = (latticeWidth - pathWidth)/2;
-			topLatticeMargin = (latticeHeight - pathHeight)/2;
-			calculateLevels(
-					levelCount, 
-					pathWidth, 
-					pathHeight);
-			
-			movePath(0, (n/2)*size - 1);
-			drawNxMCells(pathHeight, pathWidth, n, m, size);
-    	}	    	
-	    	
     	canvas.drawPath(path, paint);
     }
 
-	private void draw2x1cells(int pathHeight, int pathWidth) {
-		path.moveTo(0, pathHeight/2-gap);
-		drawCell(0, pathHeight/2-gap, pathWidth-gap, pathHeight/2-gap, 1);
-		path.lineTo(pathWidth-gap, pathHeight/2);
-		drawCell(pathWidth-gap, pathHeight/2, 0, pathHeight/2, 1);
-		path.close();
-	}
-	
 	private void extendPath(int x, int y) {
 		path.lineTo(
 				leftCanvasMargin + (leftLatticeMargin + x) * gap, 
@@ -320,12 +309,14 @@ public class DrawView extends View {
 
 	//read from sdcard
     private String getLatestImage() {
-        File f = new File("/sdcard/DCIM/Camera");
+        File f = new File(
+        		Environment.getExternalStorageDirectory().getPath() + 
+        		"/DCIM/Camera");
         File[] files = f.listFiles();
 
         if (files.length > 0) {
 			return files[files.length-1].getAbsolutePath();
 		}
         return null;
-    }   
+    }
 }
