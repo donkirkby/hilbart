@@ -15,6 +15,7 @@ import android.graphics.Paint;
 import android.graphics.Paint.Style;
 import android.graphics.Path;
 import android.os.Environment;
+import android.view.MotionEvent;
 import android.view.View;
 
 public class DrawView extends View {
@@ -24,10 +25,21 @@ public class DrawView extends View {
 	private Path path;
 	private Dictionary<Integer, Double> levels = 
 			new Hashtable<Integer, Double>();
-	private int leftLatticeMargin;
-	private int topLatticeMargin;
+	private int[] sizes = new int[0];
+	// Canvas margin is blank pixels between the edge of the canvas and the size
+	// of the full bitmap image. Needed to keep aspect ratio.
 	private int topCanvasMargin;
 	private int leftCanvasMargin;
+	// Lattice margin is unused lattice points between the edge of the bitmap
+	// image and the path. Needed to keep path pattern in powers of two.
+	private int leftLatticeMargin;
+	private int topLatticeMargin;
+	private int imageIndex = -1;
+	private int canvasWidth;
+	private int canvasHeight;
+	private boolean isSliderShown;
+	private int latticeWidth;
+	private int latticeHeight;
     
     public DrawView(Context context) {
         super(context);
@@ -35,20 +47,23 @@ public class DrawView extends View {
         paint.setStyle(Style.STROKE);
         gap = 2;
         paint.setStrokeWidth((float) (gap/2.0));
+        canvasWidth = -1;
     }
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
     	super.onSizeChanged(w, h, oldw, oldh);
-        Bitmap bitmap = BitmapFactory.decodeFile(getLatestImage());
-		int latticeWidth;
-		int latticeHeight;
+    	canvasWidth = w;
+    	canvasHeight = h;
+        generatePath();
+    }
+
+	private void generatePath() {
+		Bitmap bitmap = BitmapFactory.decodeFile(getSelectedImage());
 		int imageHeight = bitmap.getHeight();
 		int imageWidth = bitmap.getWidth();
 		float aspect = imageHeight / (float)imageWidth;
-		int canvasWidth = w;
 		float potentialHeight = canvasWidth * aspect;
-		int canvasHeight = h;
 		if (potentialHeight > canvasHeight) {
 			latticeHeight = Math.round(canvasHeight / (float)gap);
 			latticeWidth = Math.round(canvasHeight / aspect / gap);
@@ -59,13 +74,17 @@ public class DrawView extends View {
 		leftCanvasMargin = (canvasWidth - latticeWidth*gap)/2;
 		topCanvasMargin = (canvasHeight - latticeHeight*gap)/2;
 		scaled = null;
-		path = new Path();
 		Bitmap sized = Bitmap.createScaledBitmap(
 				bitmap, 
 				latticeWidth,
 				latticeHeight,
 				false);
 		scaled = toGrayscale(sized);
+		regeneratePath();
+	}
+
+	private void regeneratePath() {
+		path = new Path();
 		int n=10;
 		int m=14;
 		int pathWidth = m;
@@ -82,18 +101,100 @@ public class DrawView extends View {
 		}
 		leftLatticeMargin = (latticeWidth - pathWidth)/2;
 		topLatticeMargin = (latticeHeight - pathHeight)/2;
-		calculateLevels(
-				levelCount, 
-				pathWidth, 
-				pathHeight);
+		if (levels.size() == 0)
+		{
+			calculateLevels(
+					levelCount, 
+					pathWidth, 
+					pathHeight);
+		}
 		
 		movePath(0, (n/2)*size - 1);
 		drawNxMCells(pathHeight, pathWidth, n, m, size);
-    }
+	}
 
     @Override
     public void onDraw(Canvas canvas) {
     	canvas.drawPath(path, paint);
+    	if (isSliderShown)
+    	{
+    		int sliderHeight = calculateSliderHeight();
+			int sliderY = 
+    				canvasHeight - sliderHeight/2;
+			canvas.drawLine(0, sliderY, canvasWidth, sliderY, paint);
+			for (int size : sizes) {
+				int x = (int)Math.round(canvasWidth * levels.get(size));
+				canvas.drawCircle(x, sliderY, sliderHeight/2-1, paint);
+			}
+    	}
+    }
+
+	private int calculateSliderHeight() {
+		return topCanvasMargin + gap*topLatticeMargin;
+	}
+    
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+		if (canvasWidth <= 0)
+		{
+			return true;
+		}
+		
+		int sliderHeight = calculateSliderHeight();
+		if (event.getY() > canvasHeight - 2*sliderHeight)
+		{
+			isSliderShown = true;
+			int size = 1;
+			int chosenSize = -1;
+			double motionLevel = event.getX() / canvasWidth;
+			double smallestDifference = Double.POSITIVE_INFINITY;
+			boolean sizeExists = true;
+			while (sizeExists)
+			{
+				Double sizeLevel = levels.get(size);
+				sizeExists = sizeLevel != null;
+				if (sizeExists)
+				{
+					double difference = Math.abs(sizeLevel - motionLevel);
+					if (difference < smallestDifference)
+					{
+						chosenSize = size;
+						smallestDifference = difference;
+					}
+					size *= 2;
+				}
+			}
+			levels.put(chosenSize, motionLevel);
+			regeneratePath();
+//			paint.setColor(Color.rgb((int) (motionLevel*255), 0, 0));
+			invalidate();
+		}
+		else
+		{
+			if (isSliderShown)
+			{
+				isSliderShown = false;
+				invalidate();
+			}
+			if (event.getX() < canvasWidth / 3)
+			{
+				if (imageIndex > 0)
+				{
+					imageIndex--;
+					generatePath();
+					invalidate();
+				}
+				isSliderShown = false;
+			}
+			else if (event.getX() > canvasWidth / 3 * 2)
+			{
+				imageIndex++;
+				generatePath();
+				invalidate();
+				isSliderShown = false;
+			}
+		}
+		return true;
     }
 
 	private void extendPath(int x, int y) {
@@ -273,6 +374,7 @@ public class DrawView extends View {
     		int width, 
     		int height) {
         
+    	sizes = new int[levelCount];
         int[] colourCounts = new int[256];
         for (int x = 0; x < width; x++) {
 			for (int y = 0; y < height; y++) {
@@ -289,6 +391,7 @@ public class DrawView extends View {
 				pixelsPassed += colourCounts[intensity];
 				intensity++;
 			}
+        	sizes[i] = size;
         	levels.put(size, intensity/255.0);
 			size *= 2;
 		}
@@ -308,14 +411,18 @@ public class DrawView extends View {
     }
 
 	//read from sdcard
-    private String getLatestImage() {
+    private String getSelectedImage() {
         File f = new File(
         		Environment.getExternalStorageDirectory().getPath() + 
         		"/DCIM/Camera");
         File[] files = f.listFiles();
 
-        if (files.length > 0) {
-			return files[files.length-1].getAbsolutePath();
+        if (imageIndex < 0 || files.length <= imageIndex)
+        {
+        	imageIndex = files.length - 1;
+        }
+        if (imageIndex >= 0) {
+			return files[imageIndex].getAbsolutePath();
 		}
         return null;
     }
